@@ -1,0 +1,6 @@
+# .gitignore
+tf_env/
+__pycache__/
+*.pyc
+*.pkl
+*.keras

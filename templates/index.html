@@ -1,0 +1,1157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digit Oracle — AI Digit Recognition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ─── CSS Variables ─────────────────────────────────────────── */
+      :root {
+        --bg: #0a0a0f;
+        --surface: #111118;
+        --surface2: #1a1a26;
+        --border: #2a2a40;
+        --accent: #7c5cfc;
+        --accent2: #fc5c8a;
+        --accent3: #5cfcca;
+        --text: #e8e8f0;
+        --muted: #6666888;
+        --digit-glow: 0 0 40px #7c5cfc55;
+      }
+
+      /* ─── Reset & Base ──────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        font-size: 16px;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "DM Mono", monospace;
+        min-height: 100vh;
+        overflow-x: hidden;
+        position: relative;
+      }
+
+      /* ─── Animated background grid ─────────────────────────────── */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(124, 92, 252, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(124, 92, 252, 0.04) 1px, transparent 1px);
+        background-size: 40px 40px;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* ─── Glowing orbs in background ───────────────────────────── */
+      .orb {
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.15;
+        pointer-events: none;
+        z-index: 0;
+        animation: drift 18s ease-in-out infinite alternate;
+      }
+      .orb-1 {
+        width: 500px;
+        height: 500px;
+        background: var(--accent);
+        top: -100px;
+        left: -150px;
+      }
+      .orb-2 {
+        width: 400px;
+        height: 400px;
+        background: var(--accent2);
+        bottom: -100px;
+        right: -100px;
+        animation-delay: -6s;
+      }
+      .orb-3 {
+        width: 300px;
+        height: 300px;
+        background: var(--accent3);
+        top: 40%;
+        left: 50%;
+        animation-delay: -12s;
+      }
+
+      @keyframes drift {
+        from {
+          transform: translate(0, 0) scale(1);
+        }
+        to {
+          transform: translate(30px, 20px) scale(1.08);
+        }
+      }
+
+      /* ─── Layout ────────────────────────────────────────────────── */
+      .wrapper {
+        position: relative;
+        z-index: 1;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0 24px 60px;
+      }
+
+      /* ─── Header ────────────────────────────────────────────────── */
+      header {
+        padding: 40px 0 36px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .logo-icon {
+        width: 44px;
+        height: 44px;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 20px;
+        color: white;
+        box-shadow: 0 0 20px #7c5cfc66;
+      }
+      .logo-text {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 1.5rem;
+        letter-spacing: -0.02em;
+      }
+      .logo-text span {
+        color: var(--accent);
+      }
+      .badge {
+        font-size: 0.65rem;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        padding: 4px 10px;
+        border-radius: 20px;
+        color: var(--accent3);
+        letter-spacing: 0.08em;
+      }
+
+      /* ─── Hero ──────────────────────────────────────────────────── */
+      .hero {
+        padding: 60px 0 40px;
+        text-align: center;
+      }
+      .hero h1 {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: clamp(2.2rem, 5vw, 3.8rem);
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+        margin-bottom: 16px;
+      }
+      .hero h1 .grad {
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .hero p {
+        color: #9090b8;
+        font-size: 1rem;
+        max-width: 480px;
+        margin: 0 auto;
+        line-height: 1.7;
+      }
+
+      /* ─── Main grid ─────────────────────────────────────────────── */
+      .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-top: 40px;
+      }
+      @media (max-width: 720px) {
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ─── Cards ─────────────────────────────────────────────────── */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+        transition:
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      .card:hover {
+        border-color: #3a3a60;
+        box-shadow: 0 8px 40px rgba(124, 92, 252, 0.1);
+      }
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          ellipse at top left,
+          rgba(124, 92, 252, 0.06),
+          transparent 60%
+        );
+        pointer-events: none;
+      }
+      .card-label {
+        font-size: 0.65rem;
+        letter-spacing: 0.12em;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-label::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        background: var(--accent);
+        border-radius: 50%;
+      }
+
+      /* ─── Canvas section ────────────────────────────────────────── */
+      .canvas-container {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+      #drawingCanvas {
+        width: 100%;
+        max-width: 340px;
+        aspect-ratio: 1;
+        border-radius: 16px;
+        cursor: crosshair;
+        touch-action: none;
+        background: #0c0c14;
+        border: 2px solid var(--border);
+        box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+        transition:
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      #drawingCanvas:hover {
+        border-color: var(--accent);
+        box-shadow:
+          inset 0 0 40px rgba(0, 0, 0, 0.8),
+          0 0 20px rgba(124, 92, 252, 0.2);
+      }
+
+      .canvas-hint {
+        font-size: 0.72rem;
+        color: #55557a;
+        text-align: center;
+      }
+
+      /* ─── Toolbar ───────────────────────────────────────────────── */
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+        flex-wrap: wrap;
+      }
+      .brush-group {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex: 1;
+      }
+      .brush-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2px solid var(--border);
+        background: var(--surface2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          border-color 0.2s,
+          transform 0.2s;
+        position: relative;
+      }
+      .brush-btn.active {
+        border-color: var(--accent);
+        transform: scale(1.1);
+      }
+      .brush-dot {
+        background: white;
+        border-radius: 50%;
+      }
+
+      /* ─── Color picker row ──────────────────────────────────────── */
+      .color-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .color-swatch {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          border-color 0.2s;
+      }
+      .color-swatch:hover {
+        transform: scale(1.15);
+      }
+      .color-swatch.active {
+        border-color: white;
+        transform: scale(1.15);
+      }
+
+      /* ─── Buttons ───────────────────────────────────────────────── */
+      .btn-row {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+      }
+      .btn {
+        flex: 1;
+        padding: 12px 18px;
+        border-radius: 12px;
+        border: none;
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition:
+          transform 0.15s,
+          box-shadow 0.15s,
+          opacity 0.15s;
+        letter-spacing: 0.02em;
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, var(--accent), #5a3ce0);
+        color: white;
+        box-shadow: 0 4px 20px #7c5cfc44;
+      }
+      .btn-primary:hover {
+        box-shadow: 0 6px 28px #7c5cfc66;
+      }
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-ghost {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .btn-ghost:hover {
+        border-color: #4a4a70;
+      }
+
+      /* ─── Spinner ───────────────────────────────────────────────── */
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        display: inline-block;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ─── Result card ───────────────────────────────────────────── */
+      .result-area {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .digit-display {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 28px;
+        background: var(--surface2);
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        min-height: 130px;
+      }
+      .digit-big {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 5rem;
+        line-height: 1;
+        color: var(--accent);
+        text-shadow: var(--digit-glow);
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        opacity: 0;
+        transform: scale(0.6) translateY(10px);
+      }
+      .digit-big.show {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+      .digit-meta {
+        flex: 1;
+      }
+      .digit-label {
+        font-size: 0.65rem;
+        color: #6666aa;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 8px;
+      }
+      .confidence-val {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 2rem;
+        color: var(--accent3);
+        transition: all 0.4s 0.1s;
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      .confidence-val.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .confidence-sub {
+        font-size: 0.7rem;
+        color: #555588;
+        margin-top: 4px;
+      }
+
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: #44446688;
+        padding: 20px 0;
+      }
+      .empty-icon {
+        font-size: 3rem;
+        opacity: 0.25;
+        filter: grayscale(1);
+      }
+      .empty-text {
+        font-size: 0.8rem;
+        text-align: center;
+      }
+
+      /* ─── Bar chart ─────────────────────────────────────────────── */
+      .chart-title {
+        font-size: 0.65rem;
+        letter-spacing: 0.1em;
+        color: #6666aa;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+      }
+      .bars {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: 20px 1fr 54px;
+        gap: 10px;
+        align-items: center;
+      }
+      .bar-label {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 0.8rem;
+        color: #9090b8;
+        text-align: right;
+      }
+      .bar-track {
+        height: 14px;
+        background: var(--surface2);
+        border-radius: 7px;
+        overflow: hidden;
+        position: relative;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 7px;
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        width: 0;
+        transition: width 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        position: relative;
+      }
+      .bar-fill.winner {
+        background: linear-gradient(90deg, var(--accent3), #3ce0b0);
+        box-shadow: 0 0 8px var(--accent3);
+      }
+      .bar-fill::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          transparent 60%,
+          rgba(255, 255, 255, 0.15)
+        );
+      }
+      .bar-pct {
+        font-size: 0.68rem;
+        color: #7777aa;
+        text-align: right;
+      }
+      .bar-pct.winner {
+        color: var(--accent3);
+        font-weight: 600;
+      }
+
+      /* ─── Info strip ─────────────────────────────────────────────── */
+      .info-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 24px;
+      }
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        text-align: center;
+      }
+      .stat-val {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 1.5rem;
+        color: var(--accent);
+        margin-bottom: 4px;
+      }
+      .stat-label {
+        font-size: 0.62rem;
+        color: #555588;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      /* ─── History strip ──────────────────────────────────────────── */
+      .history-label {
+        font-size: 0.65rem;
+        letter-spacing: 0.1em;
+        color: #6666aa;
+        text-transform: uppercase;
+        margin: 28px 0 14px;
+      }
+      .history-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .history-item {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 2px;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          transform 0.2s;
+        overflow: hidden;
+      }
+      .history-item:hover {
+        border-color: var(--accent);
+        transform: scale(1.08);
+      }
+      .history-thumb {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 1.4rem;
+        color: var(--accent);
+      }
+      .history-conf {
+        font-size: 0.5rem;
+        color: #555588;
+      }
+
+      /* ─── Toast ─────────────────────────────────────────────────── */
+      .toast {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 20px;
+        font-size: 0.82rem;
+        max-width: 300px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition:
+          opacity 0.3s,
+          transform 0.3s;
+        z-index: 100;
+        pointer-events: none;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .toast.error {
+        border-color: #fc5c5c44;
+        color: #fc9090;
+      }
+      .toast.success {
+        border-color: var(--accent3);
+        color: var(--accent3);
+      }
+
+      /* ─── Undo micro btn ─────────────────────────────────────────── */
+      .undo-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        transition: border-color 0.2s;
+        color: var(--text);
+      }
+      .undo-btn:hover {
+        border-color: var(--accent);
+      }
+
+      /* ─── Responsive tweaks ──────────────────────────────────────── */
+      @media (max-width: 480px) {
+        .info-strip {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .info-strip .stat-card:last-child {
+          grid-column: 1 / -1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="wrapper">
+      <!-- Header -->
+      <header>
+        <div class="logo">
+          <div class="logo-icon">∂</div>
+          <div class="logo-text">Digit<span>Oracle</span></div>
+        </div>
+        <div class="badge">MNIST · Neural Net</div>
+      </header>
+
+      <!-- Hero -->
+      <div class="hero">
+        <h1>Draw. Predict.<br /><span class="grad">Understand.</span></h1>
+        <p>
+          Handwritten digit recognition powered by a deep neural network trained
+          on 60,000+ examples.
+        </p>
+      </div>
+
+      <!-- Stats strip -->
+      <div class="info-strip">
+        <div class="stat-card">
+          <div class="stat-val">99.2%</div>
+          <div class="stat-label">Test Accuracy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">60K</div>
+          <div class="stat-label">Training Samples</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">3-layer</div>
+          <div class="stat-label">Dense Network</div>
+        </div>
+      </div>
+
+      <!-- Main grid -->
+      <div class="main-grid">
+        <!-- LEFT: Drawing canvas -->
+        <div class="card">
+          <div class="card-label">Whiteboard</div>
+          <div class="canvas-container">
+            <!-- Undo button -->
+            <button class="undo-btn" id="undoBtn" title="Undo last stroke">
+              ↩
+            </button>
+
+            <canvas id="drawingCanvas" width="340" height="340"></canvas>
+
+            <p class="canvas-hint">
+              ✏️ Draw a single digit (0–9) on the canvas above
+            </p>
+
+            <!-- Brush size -->
+            <div class="toolbar">
+              <div class="brush-group">
+                <span
+                  style="font-size: 0.65rem; color: #555588; margin-right: 4px"
+                  >SIZE</span
+                >
+                <button
+                  class="brush-btn"
+                  data-size="10"
+                  onclick="setBrush(10, this)"
+                >
+                  <div class="brush-dot" style="width: 5px; height: 5px"></div>
+                </button>
+                <button
+                  class="brush-btn active"
+                  data-size="22"
+                  onclick="setBrush(22, this)"
+                >
+                  <div
+                    class="brush-dot"
+                    style="width: 11px; height: 11px"
+                  ></div>
+                </button>
+                <button
+                  class="brush-btn"
+                  data-size="36"
+                  onclick="setBrush(36, this)"
+                >
+                  <div
+                    class="brush-dot"
+                    style="width: 18px; height: 18px"
+                  ></div>
+                </button>
+              </div>
+              <!-- Color row -->
+              <div class="color-row">
+                <span
+                  style="font-size: 0.65rem; color: #555588; margin-right: 4px"
+                  >INK</span
+                >
+                <div
+                  class="color-swatch active"
+                  style="background: #ffffff"
+                  onclick="setColor('#ffffff', this)"
+                ></div>
+                <div
+                  class="color-swatch"
+                  style="background: #7c5cfc"
+                  onclick="setColor('#7c5cfc', this)"
+                ></div>
+                <div
+                  class="color-swatch"
+                  style="background: #5cfcca"
+                  onclick="setColor('#5cfcca', this)"
+                ></div>
+                <div
+                  class="color-swatch"
+                  style="background: #fc5c8a"
+                  onclick="setColor('#fc5c8a', this)"
+                ></div>
+              </div>
+            </div>
+
+            <div class="btn-row">
+              <button
+                class="btn btn-primary"
+                id="predictBtn"
+                onclick="predict()"
+              >
+                ⚡ Predict
+              </button>
+              <button class="btn btn-ghost" onclick="clearCanvas()">
+                ⌫ Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Results -->
+        <div class="card">
+          <div class="card-label">Prediction Result</div>
+          <div class="result-area">
+            <!-- Big digit display -->
+            <div class="digit-display" id="digitDisplay">
+              <div class="empty-state" id="emptyState">
+                <div class="empty-icon">🔮</div>
+                <div class="empty-text">Draw a digit and hit Predict</div>
+              </div>
+              <div
+                id="resultContent"
+                style="
+                  display: none;
+                  width: 100%;
+                  display: none;
+                  align-items: center;
+                  gap: 24px;
+                "
+              >
+                <div class="digit-big" id="digitBig">—</div>
+                <div class="digit-meta">
+                  <div class="digit-label">Confidence</div>
+                  <div class="confidence-val" id="confVal">0%</div>
+                  <div class="confidence-sub" id="confSub">Model certainty</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bar chart -->
+            <div id="chartSection" style="display: none">
+              <div class="chart-title">
+                Probability Distribution (all digits)
+              </div>
+              <div class="bars" id="barsContainer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prediction history -->
+      <div id="historySection" style="display: none">
+        <div class="history-label">Prediction History</div>
+        <div class="history-row" id="historyRow"></div>
+      </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+      /* ──────────────────────────────────────────────
+   Canvas setup
+────────────────────────────────────────────── */
+      const canvas = document.getElementById("drawingCanvas");
+      const ctx = canvas.getContext("2d");
+      let drawing = false;
+      let brushSize = 22;
+      let brushColor = "#ffffff";
+      let strokes = []; // for undo
+      let currentStroke = [];
+
+      // Fill canvas black
+      ctx.fillStyle = "#0c0c14";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      /* ── Pointer helpers ── */
+      function getPos(e) {
+        const r = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / r.width;
+        const scaleY = canvas.height / r.height;
+        const src = e.touches ? e.touches[0] : e;
+        return {
+          x: (src.clientX - r.left) * scaleX,
+          y: (src.clientY - r.top) * scaleY,
+        };
+      }
+
+      function startDraw(e) {
+        e.preventDefault();
+        drawing = true;
+        const pos = getPos(e);
+        currentStroke = [{ x: pos.x, y: pos.y }];
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      }
+
+      function draw(e) {
+        e.preventDefault();
+        if (!drawing) return;
+        const pos = getPos(e);
+        currentStroke.push({ x: pos.x, y: pos.y });
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = brushColor;
+        ctx.shadowColor = brushColor;
+        ctx.shadowBlur = brushSize * 0.5;
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      }
+
+      function endDraw(e) {
+        if (!drawing) return;
+        drawing = false;
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        if (currentStroke.length > 0) {
+          strokes.push({
+            points: currentStroke,
+            size: brushSize,
+            color: brushColor,
+          });
+          currentStroke = [];
+        }
+      }
+
+      canvas.addEventListener("mousedown", startDraw);
+      canvas.addEventListener("mousemove", draw);
+      canvas.addEventListener("mouseup", endDraw);
+      canvas.addEventListener("mouseleave", endDraw);
+      canvas.addEventListener("touchstart", startDraw, { passive: false });
+      canvas.addEventListener("touchmove", draw, { passive: false });
+      canvas.addEventListener("touchend", endDraw);
+
+      /* ── Controls ── */
+      function clearCanvas() {
+        ctx.fillStyle = "#0c0c14";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        strokes = [];
+        currentStroke = [];
+        resetResult();
+      }
+
+      function setBrush(size, el) {
+        brushSize = size;
+        document
+          .querySelectorAll(".brush-btn")
+          .forEach((b) => b.classList.remove("active"));
+        el.classList.add("active");
+      }
+
+      function setColor(col, el) {
+        brushColor = col;
+        document
+          .querySelectorAll(".color-swatch")
+          .forEach((s) => s.classList.remove("active"));
+        el.classList.add("active");
+      }
+
+      /* ── Undo last stroke ── */
+      document.getElementById("undoBtn").addEventListener("click", () => {
+        if (!strokes.length) return;
+        strokes.pop();
+        redrawAll();
+      });
+
+      function redrawAll() {
+        ctx.fillStyle = "#0c0c14";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        strokes.forEach((s) => {
+          if (!s.points.length) return;
+          ctx.beginPath();
+          ctx.moveTo(s.points[0].x, s.points[0].y);
+          s.points.forEach((p) => ctx.lineTo(p.x, p.y));
+          ctx.lineWidth = s.size;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = s.color;
+          ctx.stroke();
+        });
+      }
+
+      /* ──────────────────────────────────────────────
+   Prediction
+────────────────────────────────────────────── */
+      const history = [];
+
+      async function predict() {
+        const imageData = canvas.toDataURL("image/png");
+        const btn = document.getElementById("predictBtn");
+
+        // Check canvas isn't empty
+        const imgD = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const hasContent = imgD.data.some((v, i) => i % 4 !== 3 && v > 20);
+        if (!hasContent) {
+          showToast("✏️ Draw something first!", "error");
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Analyzing…';
+
+        try {
+          const resp = await fetch("/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: imageData }),
+          });
+
+          if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
+          const data = await resp.json();
+          if (data.error) throw new Error(data.error);
+
+          showResult(data);
+          addHistory(data.digit, data.confidence);
+          showToast(
+            `✅ Predicted: ${data.digit} (${data.confidence.toFixed(1)}%)`,
+            "success",
+          );
+        } catch (err) {
+          console.error(err);
+          showToast("⚠️ " + err.message, "error");
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = "⚡ Predict";
+        }
+      }
+
+      /* ── Show result ── */
+      function showResult(data) {
+        document.getElementById("emptyState").style.display = "none";
+        const rc = document.getElementById("resultContent");
+        rc.style.display = "flex";
+
+        const digitEl = document.getElementById("digitBig");
+        const confEl = document.getElementById("confVal");
+        const subEl = document.getElementById("confSub");
+
+        // Animate digit
+        digitEl.classList.remove("show");
+        confEl.classList.remove("show");
+        void digitEl.offsetWidth;
+
+        digitEl.textContent = data.digit;
+        confEl.textContent = data.confidence.toFixed(1) + "%";
+        subEl.textContent =
+          data.confidence >= 90
+            ? "Very confident ✨"
+            : data.confidence >= 70
+              ? "Fairly confident"
+              : "Low confidence — try again";
+
+        requestAnimationFrame(() => {
+          digitEl.classList.add("show");
+          confEl.classList.add("show");
+        });
+
+        // Bar chart
+        buildChart(data.probabilities, data.digit);
+      }
+
+      function buildChart(probs, winner) {
+        const section = document.getElementById("chartSection");
+        const bars = document.getElementById("barsContainer");
+        section.style.display = "block";
+        bars.innerHTML = "";
+
+        probs.forEach((pct, i) => {
+          const isWinner = i === winner;
+          const row = document.createElement("div");
+          row.className = "bar-row";
+          row.innerHTML = `
+      <div class="bar-label">${i}</div>
+      <div class="bar-track">
+        <div class="bar-fill ${isWinner ? "winner" : ""}" id="bar-${i}"></div>
+      </div>
+      <div class="bar-pct ${isWinner ? "winner" : ""}">${pct.toFixed(1)}%</div>
+    `;
+          bars.appendChild(row);
+
+          setTimeout(
+            () => {
+              document.getElementById(`bar-${i}`).style.width =
+                Math.min(pct, 100) + "%";
+            },
+            50 + i * 50,
+          );
+        });
+      }
+
+      function resetResult() {
+        document.getElementById("emptyState").style.display = "flex";
+        document.getElementById("resultContent").style.display = "none";
+        document.getElementById("chartSection").style.display = "none";
+        document.getElementById("digitBig").classList.remove("show");
+        document.getElementById("confVal").classList.remove("show");
+      }
+
+      /* ── History ── */
+      function addHistory(digit, conf) {
+        history.unshift({ digit, conf });
+        if (history.length > 10) history.pop();
+
+        const section = document.getElementById("historySection");
+        const row = document.getElementById("historyRow");
+        section.style.display = "block";
+        row.innerHTML = "";
+
+        history.forEach((h) => {
+          const el = document.createElement("div");
+          el.className = "history-item";
+          el.title = `${h.digit} — ${h.conf.toFixed(1)}%`;
+          el.innerHTML = `<div class="history-thumb">${h.digit}</div><div class="history-conf">${h.conf.toFixed(0)}%</div>`;
+          row.appendChild(el);
+        });
+      }
+
+      /* ── Toast ── */
+      let toastTimer;
+      function showToast(msg, type = "") {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.className = `toast ${type} show`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          t.classList.remove("show");
+        }, 3000);
+      }
+
+      /* ── Keyboard shortcut: Enter = predict, Escape = clear ── */
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") predict();
+        if (e.key === "Escape") clearCanvas();
+        if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+          e.preventDefault();
+          document.getElementById("undoBtn").click();
+        }
+      });
+    </script>
+  </body>
+</html>
