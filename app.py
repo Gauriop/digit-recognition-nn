@@ -1,151 +1,149 @@
-"""
-app.py  —  Flask backend for Handwritten Digit Recognition
+""" app.py — Flask backend for Handwritten Digit & Letter Recognition
 -----------
-Folder structure expected:
-  your_project/
-  ├── app.py
-  ├── handwritten (3).keras
-  ├── handwritten (3).pkl
-  └── templates/
-        └── index.html
-
-KEY FIX: Canvas sends black-bg + white-ink images.
-  DO NOT invert. Instead, crop → center → pad → normalize.
+Supports both digit recognition (MNIST) and letter recognition (custom EMNIST model)
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
-import numpy as np
 import tensorflow as tf
+import numpy as np
 import pickle
-import base64
-import io
 import os
-from PIL import Image
+from PIL import Image, ImageOps
+import io
+import base64
 
 app = Flask(__name__)
 CORS(app)
 
-# ── Load model & labels ───────────────────────────────────────────────────────
-KERAS_PATH = "handwritten (3).keras"
-PKL_PATH   = "handwritten (3).pkl"
+# ============= DIGIT RECOGNITION (MNIST) =============
 
 def find_keras_model():
-    if os.path.exists(KERAS_PATH):
-        return KERAS_PATH
-    for f in os.listdir("."):
-        if f.endswith(".keras"):
-            print(f"Found keras model: {f}")
-            return f
+    """Find the saved Keras digit model file."""
+    candidates = [
+        os.path.expanduser("~/digit-recognition-nn/handwritten.keras"),
+        os.path.expanduser("~/digit-recognition-nn/handwritten.h5"),
+        "./handwritten.keras",
+        "./handwritten.h5",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            print(f"Found digit model: {path}")
+            return path
     return None
 
-def load_labels():
-    for p in [PKL_PATH, "handwritten (3).pkl"]:
-        if os.path.exists(p):
-            with open(p, "rb") as f:
-                labels = pickle.load(f)
-            print(f"✅ Labels loaded from {p}: {labels}")
-            return labels
-    # Default fallback
-    return [str(i) for i in range(10)]
+def load_digit_labels():
+    """Load class labels for digit recognition."""
+    label_candidates = [
+        os.path.expanduser("~/digit-recognition-nn/handwritten.pkl"),
+        "./handwritten.pkl",
+    ]
+    for path in label_candidates:
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return pickle.load(f)
+    return list(range(10))  # Default: 0-9
 
-model  = tf.keras.models.load_model(find_keras_model())
-labels = load_labels()
-print("✅ Model ready. Input shape:", model.input_shape)
+# Load digit model
+digit_model = tf.keras.models.load_model(find_keras_model(), compile=False)
+digit_labels = load_digit_labels()
+print("✅ Digit model ready. Input shape:", digit_model.input_shape)
 
+# ============= LETTER RECOGNITION (Custom EMNIST Model) =============
 
-# ── Preprocessing ─────────────────────────────────────────────────────────────
-def preprocess_image(image_data: str) -> np.ndarray:
-    """
-    Canvas = black background (#0c0c14) + white ink.
-    MNIST   = black background + white digit, 28x28, centered.
+def find_letter_model():
+    """Find the saved Keras letter model file."""
+    candidates = [
+        os.path.expanduser("~/digit-recognition-nn/handwriting_letters.keras"),
+        "./handwriting_letters.keras",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            print(f"Found letter model: {path}")
+            return path
+    return None
 
-    Steps:
-      1. Decode base64 → grayscale PIL image
-      2. Resize canvas to 28x28
-      3. NO inversion (canvas already has white ink on black)
-      4. Crop bounding box of drawn content
-      5. Resize crop to 20x20, pad to 28x28 (centers digit like MNIST)
-      6. Row-wise L2 normalize (axis=1) — matches Colab training
-      7. Reshape to (1, 28, 28)
-    """
-    if "," in image_data:
-        image_data = image_data.split(",", 1)[1]
+def load_letter_labels():
+    """Load class labels for letter recognition."""
+    label_candidates = [
+        os.path.expanduser("~/digit-recognition-nn/handwriting_labels.pkl"),
+        "./handwriting_labels.pkl",
+    ]
+    for path in label_candidates:
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return pickle.load(f)
+    return {i: chr(65 + i) for i in range(26)}  # Default: 0->A ... 25->Z
 
-    img_bytes = base64.b64decode(image_data)
-    img = Image.open(io.BytesIO(img_bytes)).convert("L")
+# Load letter model
+letter_model = tf.keras.models.load_model(find_letter_model(), compile=False)
+letter_labels = load_letter_labels()
+print("✅ Letter model ready. Input shape:", letter_model.input_shape)
 
-    # Resize to 28x28 first for bounding-box detection
-    img = img.resize((28, 28), Image.LANCZOS)
-    img_array = np.array(img, dtype=np.float32)
+# ============= ROUTES =============
 
-    # ── Center the digit (MNIST-style) ────────────────────────────────────────
-    threshold = 30  # ignore near-black background noise
-    mask = img_array > threshold
-
-    if mask.any():
-        rows = np.any(mask, axis=1)
-        cols = np.any(mask, axis=0)
-        rmin, rmax = np.where(rows)[0][[0, -1]]
-        cmin, cmax = np.where(cols)[0][[0, -1]]
-
-        cropped = img_array[rmin:rmax+1, cmin:cmax+1]
-
-        # Resize crop to 20x20, leaving a 4-px border all around
-        pil_crop    = Image.fromarray(cropped.astype(np.uint8))
-        pil_resized = pil_crop.resize((20, 20), Image.LANCZOS)
-
-        # Place in center of 28x28 black canvas
-        img_array = np.zeros((28, 28), dtype=np.float32)
-        img_array[4:24, 4:24] = np.array(pil_resized, dtype=np.float32)
-
-    # ── Row-wise L2 normalisation (matches Colab Cell 24) ────────────────────
-    normalized = tf.keras.utils.normalize(img_array, axis=1)
-    img_array  = np.array(normalized, dtype=np.float32)
-
-    return img_array.reshape(1, 28, 28).astype(np.float32)
-
-
-# ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
+    """Digit recognition page."""
     return render_template("index.html")
 
+@app.route("/handwriting")
+def handwriting():
+    """Letter recognition page."""
+    return render_template("handwriting.html")
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.get_json(force=True)
-    if not data or "image" not in data:
-        return jsonify({"error": "No image provided"}), 400
-
+    """Predict digit from canvas image."""
     try:
-        arr   = preprocess_image(data["image"])
-        probs = model.predict(arr, verbose=0)[0]   # shape (10,)
+        data = request.get_json()
+        img_data = base64.b64decode(data["image"].split(",")[1])
+        image = Image.open(io.BytesIO(img_data)).convert("L")  # Grayscale
+        image = np.array(image) / 255.0
+        image = image.reshape(1, 28, 28, 1)
 
-        digit      = int(np.argmax(probs))
-        confidence = float(np.max(probs)) * 100
-        probs_list = [round(float(p) * 100, 2) for p in probs]
-
-        # Use pkl labels if available
-        label = labels[digit] if labels else str(digit)
+        prediction = digit_model.predict(image, verbose=0)
+        predicted_label = digit_labels[np.argmax(prediction)]
+        confidence = float(np.max(prediction)) * 100
 
         return jsonify({
-            "digit":         digit,
-            "label":         label,
-            "confidence":    round(confidence, 2),
-            "probabilities": probs_list,
+            "prediction": str(predicted_label),
+            "confidence": round(confidence, 2)
         })
-
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 400
 
+@app.route("/predict_handwriting", methods=["POST"])
+def predict_handwriting():
+    """Predict handwritten letter using custom EMNIST model."""
+    try:
+        data = request.get_json()
+        img_data = base64.b64decode(data["image"].split(",")[1])
 
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "model_loaded": model is not None, "labels": labels})
+        # Convert to grayscale
+        image = Image.open(io.BytesIO(img_data)).convert("L")
 
+        # Resize to 28x28 (what the model expects)
+        image = image.resize((28, 28), Image.Resampling.LANCZOS)
+
+        # Normalize to 0-1
+        img_array = np.array(image, dtype="float32") / 255.0
+
+        # Reshape for model input: (1, 28, 28, 1)
+        img_array = img_array.reshape(1, 28, 28, 1)
+
+        # Predict
+        prediction = letter_model.predict(img_array, verbose=0)
+        predicted_index = int(np.argmax(prediction))
+        predicted_letter = letter_labels[predicted_index]
+        confidence = float(np.max(prediction)) * 100
+
+        return jsonify({
+            "text": predicted_letter,
+            "confidence": round(confidence, 2)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
