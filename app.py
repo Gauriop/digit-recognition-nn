@@ -4,17 +4,13 @@ app.py  —  Flask backend for Handwritten Digit Recognition
 Folder structure expected:
   your_project/
   ├── app.py
-  ├── handwritten.keras     ← exported from Google Colab
-  ├── handwritten.pkl       ← exported from Google Colab (optional)
+  ├── handwritten (3).keras
+  ├── handwritten (3).pkl
   └── templates/
         └── index.html
 
-IMPORTANT — preprocessing matches Colab Cell 24 exactly:
-  1. Grayscale
-  2. Resize to 28x28  (no crop, no padding)
-  3. Invert:  255 - img_array
-  4. tf.keras.utils.normalize(img_array, axis=1)   ← row-wise L2 norm
-  5. Reshape to (1, 28, 28)
+KEY FIX: Canvas sends black-bg + white-ink images.
+  DO NOT invert. Instead, crop → center → pad → normalize.
 """
 
 from flask import Flask, request, jsonify, render_template
@@ -30,82 +26,87 @@ from PIL import Image
 app = Flask(__name__)
 CORS(app)
 
-# ── Load model once at startup ────────────────────────────────────────────────
-PKL_PATH   = "handwritten (3).pkl"
+# ── Load model & labels ───────────────────────────────────────────────────────
 KERAS_PATH = "handwritten (3).keras"
+PKL_PATH   = "handwritten (3).pkl"
 
 def find_keras_model():
-    """
-    Looks for any .keras file in the current directory.
-    Handles filenames with spaces like 'handwritten (3).keras'.
-    """
-    # Try exact name first
     if os.path.exists(KERAS_PATH):
         return KERAS_PATH
-    # Scan directory for any .keras file
     for f in os.listdir("."):
         if f.endswith(".keras"):
             print(f"Found keras model: {f}")
             return f
     return None
 
-def load_model():
-    keras_path = find_keras_model()
-    if keras_path:
-        print(f"Loading model from: {keras_path}")
-        return tf.keras.models.load_model(keras_path)
+def load_labels():
+    for p in [PKL_PATH, "handwritten.pkl"]:
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                labels = pickle.load(f)
+            print(f"✅ Labels loaded from {p}: {labels}")
+            return labels
+    # Default fallback
+    return [str(i) for i in range(10)]
 
-    raise FileNotFoundError(
-        "No .keras model file found. Place handwritten.keras in the same folder as app.py."
-    )
-
-model = load_model()
-print("✅ Model ready.")
+model  = tf.keras.models.load_model(find_keras_model())
+labels = load_labels()
+print("✅ Model ready. Input shape:", model.input_shape)
 
 
-# ── Preprocessing — matches Colab Cell 24 exactly ─────────────────────────────
+# ── Preprocessing ─────────────────────────────────────────────────────────────
 def preprocess_image(image_data: str) -> np.ndarray:
     """
-    Your Colab Cell 24 does:
-        img = Image.open(filename).convert('L')
-        img = img.resize((28, 28))
-        img_array = np.array(img)
-        img_array = 255 - img_array                          # invert
-        img_array = tf.keras.utils.normalize(img_array, axis=1)  # row-wise L2
-        img_input = img_array.reshape(1, 28, 28)
+    Canvas = black background (#0c0c14) + white ink.
+    MNIST   = black background + white digit, 28x28, centered.
 
-    This function replicates that pipeline exactly from a base64 canvas image.
+    Steps:
+      1. Decode base64 → grayscale PIL image
+      2. Resize canvas to 28x28
+      3. NO inversion (canvas already has white ink on black)
+      4. Crop bounding box of drawn content
+      5. Resize crop to 20x20, pad to 28x28 (centers digit like MNIST)
+      6. Row-wise L2 normalize (axis=1) — matches Colab training
+      7. Reshape to (1, 28, 28)
     """
-    # Strip data-URL prefix (e.g. "data:image/png;base64,...")
     if "," in image_data:
         image_data = image_data.split(",", 1)[1]
 
     img_bytes = base64.b64decode(image_data)
-
-    # 1. Grayscale
     img = Image.open(io.BytesIO(img_bytes)).convert("L")
 
-    # 2. Resize to 28x28 — exactly like Colab (no padding, no cropping)
+    # Resize to 28x28 first for bounding-box detection
     img = img.resize((28, 28), Image.LANCZOS)
-
-    # 3. To numpy float32
     img_array = np.array(img, dtype=np.float32)
 
-    # 4. Invert: canvas = white bg + white/colour ink → need black bg + white ink
-    img_array = 255 - img_array
+    # ── Center the digit (MNIST-style) ────────────────────────────────────────
+    threshold = 30  # ignore near-black background noise
+    mask = img_array > threshold
 
-    # 5. Row-wise L2 normalisation — matches Colab exactly
-    #    tf.keras.utils.normalize divides each row by its L2 norm (axis=1)
-    #    Returns numpy array on some TF versions, tensor on others — np.array() handles both
+    if mask.any():
+        rows = np.any(mask, axis=1)
+        cols = np.any(mask, axis=0)
+        rmin, rmax = np.where(rows)[0][[0, -1]]
+        cmin, cmax = np.where(cols)[0][[0, -1]]
+
+        cropped = img_array[rmin:rmax+1, cmin:cmax+1]
+
+        # Resize crop to 20x20, leaving a 4-px border all around
+        pil_crop    = Image.fromarray(cropped.astype(np.uint8))
+        pil_resized = pil_crop.resize((20, 20), Image.LANCZOS)
+
+        # Place in center of 28x28 black canvas
+        img_array = np.zeros((28, 28), dtype=np.float32)
+        img_array[4:24, 4:24] = np.array(pil_resized, dtype=np.float32)
+
+    # ── Row-wise L2 normalisation (matches Colab Cell 24) ────────────────────
     normalized = tf.keras.utils.normalize(img_array, axis=1)
-    img_array = np.array(normalized, dtype=np.float32)
+    img_array  = np.array(normalized, dtype=np.float32)
 
-    # 6. Reshape to (1, 28, 28)
     return img_array.reshape(1, 28, 28).astype(np.float32)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
-
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -113,14 +114,6 @@ def index():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """
-    Expects JSON : { "image": "<base64 PNG>" }
-    Returns JSON : {
-        "digit":         int,
-        "confidence":    float  (0-100),
-        "probabilities": [float x 10]
-    }
-    """
     data = request.get_json(force=True)
     if not data or "image" not in data:
         return jsonify({"error": "No image provided"}), 400
@@ -133,21 +126,26 @@ def predict():
         confidence = float(np.max(probs)) * 100
         probs_list = [round(float(p) * 100, 2) for p in probs]
 
+        # Use pkl labels if available
+        label = labels[digit] if labels else str(digit)
+
         return jsonify({
             "digit":         digit,
+            "label":         label,
             "confidence":    round(confidence, 2),
             "probabilities": probs_list,
         })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "model_loaded": model is not None})
+    return jsonify({"status": "ok", "model_loaded": model is not None, "labels": labels})
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
