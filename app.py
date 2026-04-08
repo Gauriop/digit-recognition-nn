@@ -40,7 +40,7 @@ def find_keras_model():
     return None
 
 def load_labels():
-    for p in [PKL_PATH, "handwritten.pkl"]:
+    for p in [PKL_PATH, "handwritten (3).pkl"]:
         if os.path.exists(p):
             with open(p, "rb") as f:
                 labels = pickle.load(f)
